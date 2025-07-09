@@ -84,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['ajax_update'])) {
     $stock_quantity = (int)$row['quantity'];
 
     if ($new_quantity > $stock_quantity) {
-        echo 'error: Số lượng kho không đủđủ (' . $stock_quantity . ')';
+        echo 'error: Ưu đãi chỉ áp dụng cho số lượng hiện tại (' . $stock_quantity . ')';
         exit;
     }
 

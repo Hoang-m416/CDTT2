@@ -4,7 +4,7 @@ session_start();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $product_id = (int)$_POST['product_id'];
     $size = trim($_POST['size'] ?? '');
-    $size = htmlspecialchars($size); // Chống lỗi dữ liệu size như '36-40'
+    $size = htmlspecialchars($size);
     $quantity = (int)$_POST['quantity'];
 
     if ($product_id <= 0 || !$size || $quantity <= 0) {
@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $result_stock = $stmt_stock->get_result();
 
     if (!$row_stock = $result_stock->fetch_assoc()) {
-        // Lấy các size đang có để debug
+        // Lấy danh sách size hiện có để debug
         $debug_sizes = [];
         $stmt_sizes = $conn->prepare("SELECT size FROM product_sizes WHERE product_id = ?");
         $stmt_sizes->bind_param("i", $product_id);
@@ -37,12 +37,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $debug_sizes[] = $r['size'];
         }
 
-        echo "error:Không tìm thấy tồn kho cho sản phẩm (size: $size). Các size có sẵn: " . implode(', ', $debug_sizes);
+        echo "error:Không tìm thấy tồn kho cho size \"$size\". Các size có sẵn: " . implode(', ', $debug_sizes);
         exit;
     }
 
     $stock_quantity = (int)$row_stock['quantity'];
-
     $cart_key = $product_id . '_' . $size;
     $session_qty = $_SESSION['cart'][$cart_key]['quantity'] ?? 0;
 
@@ -58,24 +57,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db_qty = (int)$row_db['quantity'];
         }
     }
-    
-    
-$total_existing_qty = $session_qty + $db_qty;
-$total_after_add = $total_existing_qty + $quantity;
 
-if ($total_after_add > $stock_quantity) {
-    $available_qty = max(0, $stock_quantity - $total_existing_qty);
+    // ✅ Chỉ xét 1 nơi (session hoặc DB)
+    $current_qty = $customer_id ? $db_qty : $session_qty;
+    $total_after_add = $current_qty + $quantity;
 
-    if ($available_qty <= 0) {
-        echo "error:Sản phẩm size $size đã hết hàng hoặc bạn đã thêm hết số lượng vào giỏ.";
-    } else {
-        echo "error:Số lượng tồn kho không đủ. Bạn chỉ có thể thêm tối đa $available_qty sản phẩm size $size.";
+    if ($total_after_add > $stock_quantity) {
+        $available_qty = max(0, $stock_quantity - $current_qty);
+
+        if ($available_qty <= 0) {
+            echo "error:Sản phẩm size \"$size\" đã hết hàng hoặc bạn đã thêm hết số lượng vào giỏ.";
+        } else {
+            echo "error:Chỉ có thể thêm tối đa $available_qty sản phẩm size \"$size\" vào giỏ (còn lại trong kho).";
+        }
+        exit;
     }
-    exit;
-}
-
-
-
 
     // Lấy thông tin sản phẩm
     $stmt = $conn->prepare("SELECT id, name, image, price, discount_percentage FROM products WHERE id = ?");
@@ -91,7 +87,7 @@ if ($total_after_add > $stock_quantity) {
 
     $price_after_discount = $product['price'] * (1 - $product['discount_percentage'] / 100);
 
-    // Thêm vào SESSION giỏ hàng
+    // Thêm vào session
     if (!isset($_SESSION['cart'])) {
         $_SESSION['cart'] = [];
     }
@@ -109,7 +105,7 @@ if ($total_after_add > $stock_quantity) {
         ];
     }
 
-    // Nếu người dùng đã đăng nhập thì lưu vào DB
+    // Nếu người dùng đã đăng nhập thì lưu DB
     if ($customer_id) {
         $check_stmt = $conn->prepare("SELECT id, quantity FROM cart_items WHERE customer_id = ? AND product_id = ? AND size = ?");
         $check_stmt->bind_param("iis", $customer_id, $product_id, $size);
@@ -129,7 +125,7 @@ if ($total_after_add > $stock_quantity) {
         }
     }
 
-    echo "success:Đã thêm vào giỏ hàng!";
+    echo "success:Đã thêm $quantity sản phẩm size \"$size\" vào giỏ hàng!";
     exit;
 }
 ?>
