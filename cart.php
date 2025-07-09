@@ -307,18 +307,6 @@ $total = $subtotal + $shipping_fee;
           <div class="cart-summary">
             <h5 class="mb-3">Tóm tắt đơn hàng</h5>
             <div class="mb-3">
-              <label for="province" class="form-label">Chọn tỉnh nhận hàng</label>
-              <select class="form-select select-province" name="province" onchange="this.form.submit()">
-                <option value="">-- Chọn tỉnh --</option>
-                <?php
-                $res = $conn->query("SELECT province FROM shipping_fee ORDER BY province");
-                while ($row = $res->fetch_assoc()):
-                ?>
-                  <option value="<?= htmlspecialchars($row['province']) ?>" <?= $province == $row['province'] ? 'selected' : '' ?>>
-                    <?= htmlspecialchars($row['province']) ?>
-                  </option>
-                <?php endwhile; ?>
-              </select>
             </div>
 
             <ul class="list-group list-group-flush mb-3">
