@@ -3,11 +3,13 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Tính tổng số lượng sản phẩm trong giỏ hàng
 $cart_count = 0;
+
 if (isset($_SESSION['cart']) && is_array($_SESSION['cart'])) {
     foreach ($_SESSION['cart'] as $item) {
-        $cart_count += $item['quantity'];
+        if (isset($item['quantity'])) {
+            $cart_count += $item['quantity'];
+        }
     }
 }
 ?>

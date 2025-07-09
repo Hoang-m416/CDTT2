@@ -163,51 +163,54 @@ if (isset($_GET['remove'])) {
 // ===== KIỂM TRA LẠI TỒN KHO VÀ CẬP NHẬT GIỎ HÀNG =====
 $toast_messages = [];
 
-foreach ($_SESSION['cart'] as $key => $item) {
-    // Kiểm tra các key bắt buộc có tồn tại
-    if (!isset($item['product_id'], $item['size'], $item['quantity'], $item['name'])) {
-        continue; // Bỏ qua nếu thiếu dữ liệu
-    }
+if (isset($_SESSION['cart']) && is_array($_SESSION['cart'])) {
+    foreach ($_SESSION['cart'] as $key => $item) {
+        // Kiểm tra các key bắt buộc có tồn tại
+        if (!isset($item['product_id'], $item['size'], $item['quantity'], $item['name'])) {
+            continue; // Bỏ qua nếu thiếu dữ liệu
+        }
 
-    $product_id = $item['product_id'];
-    $size = $item['size'];
-    $quantity = $item['quantity'];
-    $name = $item['name'];
+        $product_id = $item['product_id'];
+        $size = $item['size'];
+        $quantity = $item['quantity'];
+        $name = $item['name'];
 
-    $stmt = $conn->prepare("SELECT quantity FROM product_sizes WHERE product_id = ? AND size = ?");
-    $stmt->bind_param("is", $product_id, $size);
-    $stmt->execute();
-    $res = $stmt->get_result();
+        $stmt = $conn->prepare("SELECT quantity FROM product_sizes WHERE product_id = ? AND size = ?");
+        $stmt->bind_param("is", $product_id, $size);
+        $stmt->execute();
+        $res = $stmt->get_result();
 
-    if ($row = $res->fetch_assoc()) {
-        $stock_quantity = (int)$row['quantity'];
+        if ($row = $res->fetch_assoc()) {
+            $stock_quantity = (int)$row['quantity'];
 
-        if ($quantity > $stock_quantity) {
-            if ($stock_quantity <= 0) {
-                unset($_SESSION['cart'][$key]);
-                $toast_messages[] = "Sản phẩm \"{$name}\" size {$size} đã hết hàng và bị xoá khỏi giỏ hàng.";
-            } else {
-                $_SESSION['cart'][$key]['quantity'] = $stock_quantity;
-                $toast_messages[] = "Sản phẩm \"{$name}\" size {$size} chỉ còn {$stock_quantity} sản phẩm. Đã cập nhật số lượng.";
-            }
-
-            // Nếu người dùng đã đăng nhập thì cập nhật vào DB
-            if (isset($_SESSION['customer_id'])) {
-                $customer_id = $_SESSION['customer_id'];
-
+            if ($quantity > $stock_quantity) {
                 if ($stock_quantity <= 0) {
-                    $stmt_del = $conn->prepare("DELETE FROM cart_items WHERE customer_id = ? AND product_id = ? AND size = ?");
-                    $stmt_del->bind_param("iis", $customer_id, $product_id, $size);
-                    $stmt_del->execute();
+                    unset($_SESSION['cart'][$key]);
+                    $toast_messages[] = "Sản phẩm \"{$name}\" size {$size} đã hết hàng và bị xoá khỏi giỏ hàng.";
                 } else {
-                    $stmt_upd = $conn->prepare("UPDATE cart_items SET quantity = ? WHERE customer_id = ? AND product_id = ? AND size = ?");
-                    $stmt_upd->bind_param("iiis", $stock_quantity, $customer_id, $product_id, $size);
-                    $stmt_upd->execute();
+                    $_SESSION['cart'][$key]['quantity'] = $stock_quantity;
+                    $toast_messages[] = "Sản phẩm \"{$name}\" size {$size} chỉ còn {$stock_quantity} sản phẩm. Đã cập nhật số lượng.";
+                }
+
+                // Nếu người dùng đã đăng nhập thì cập nhật vào DB
+                if (isset($_SESSION['customer_id'])) {
+                    $customer_id = $_SESSION['customer_id'];
+
+                    if ($stock_quantity <= 0) {
+                        $stmt_del = $conn->prepare("DELETE FROM cart_items WHERE customer_id = ? AND product_id = ? AND size = ?");
+                        $stmt_del->bind_param("iis", $customer_id, $product_id, $size);
+                        $stmt_del->execute();
+                    } else {
+                        $stmt_upd = $conn->prepare("UPDATE cart_items SET quantity = ? WHERE customer_id = ? AND product_id = ? AND size = ?");
+                        $stmt_upd->bind_param("iiis", $stock_quantity, $customer_id, $product_id, $size);
+                        $stmt_upd->execute();
+                    }
                 }
             }
         }
     }
 }
+
 
 
 // ===== TÍNH TỔNG TIỀN =====
