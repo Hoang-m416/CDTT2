@@ -11,6 +11,11 @@ $conn->set_charset("utf8");
 $admin_id = $_SESSION['admin_id'];
 $customer_id = $_GET['cust_id'] ?? 0;
 
+
+// ✅ Đánh dấu tất cả tin nhắn của khách này là đã đọc
+$conn->query("UPDATE messages SET is_read = 1 
+              WHERE sender = 'customer' AND sender_id = $customer_id AND receiver_id = $admin_id AND is_read = 0");
+
 // Gửi tin nhắn
 if (isset($_POST['send']) && !empty($_POST['message'])) {
     $message = $_POST['message'];

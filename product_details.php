@@ -449,9 +449,6 @@ h4{
                     <small class="text-muted text-decoration-line-through ms-1"><?= number_format($rel['price'], 0, ',', '.') ?> ₫</small>
                   <?php endif; ?>
                 </div>
-                <button class="btn-favorite" data-id="<?= $row['id'] ?>">
-                                    <span class="favorite-icon">❤</span>
-                                    </button>
                 <div class="mb-2 text-warning">
                   <?= str_repeat("⭐", floor($rel['rating'])) ?>
                   <small class="text-muted">(<?= $rel['rating_count'] ?>)</small>

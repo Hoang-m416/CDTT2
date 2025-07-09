@@ -15,7 +15,7 @@ $adminName = $_SESSION['admin_name'] ?? 'Admin';
     </div>
     <a href="dashboard.php" <?= basename($_SERVER['PHP_SELF']) === 'dashboard.php' ? 'class="active"' : '' ?>>Dashboard</a>
     <a href="admin_orders.php" <?= basename($_SERVER['PHP_SELF']) === 'admin_orders.php' ? 'class="active"' : '' ?>>Quản lý đơn hàng</a>
-    <a href="admin_messages.php" <?= basename($_SERVER['PHP_SELF']) === 'admin_messages.php' ? 'class="active"' : '' ?>>Quản lý tin nhắn</a>
+    <a href="admin_messages.php" <?= basename($_SERVER['PHP_SELF']) === 'admin_messages.php' ? 'class="active"' : '' ?>>Hỗ trợ khách hàng</a>
     <a href="admin_add_product.php" <?= basename($_SERVER['PHP_SELF']) === 'admin_add_product.php' ? 'class="active"' : '' ?>>Thêm sản phẩm</a>
     <a href="products_list.php" <?= basename($_SERVER['PHP_SELF']) === 'products_list.php' ? 'class="active"' : '' ?>>Danh sách sản phẩm</a>
     <a href="admin_category_brand.php" <?= basename($_SERVER['PHP_SELF']) === 'admin_category_brand.php' ? 'class="active"' : '' ?>>Danh mục và Thương hiệu</a>

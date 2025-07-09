@@ -23,8 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['order_id'], $_POST['n
         $allowed_transitions = [
             'Đã thanh toán' => 'Đang xử lý',
             'Đang xử lý' => 'Đang chuẩn bị hàng',
-            'Đang chuẩn bị hàng' => 'Đã gửi đơn vận chuyển',
-            'Đã gửi đơn vận chuyển' => 'Đã giao thành công'
+            'Đang chuẩn bị hàng' => 'Đã gửi đơn vận chuyển'
         ];
     } else {
         $allowed_transitions = [
@@ -274,7 +273,7 @@ $result = $conn->query($sql);
                                             'Đã thanh toán' => 'Đang xử lý',
                                             'Đang xử lý' => 'Đang chuẩn bị hàng',
                                             'Đang chuẩn bị hàng' => 'Đã gửi đơn vận chuyển',
-                                            'Đã gửi đơn vận chuyển' => 'Đã giao thành công'
+                    
                                         ];
                                     } else {
                                         $next = [

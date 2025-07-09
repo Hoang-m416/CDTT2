@@ -113,8 +113,9 @@ if (isset($_SESSION['customer'])) {
         }
 
         .product-image {
-            width: 160px;
-            height: 160px;
+            text-align
+            width: 260px;
+            height: 260px;
             object-fit: cover;
             border-radius: 14px;
             background: #e0e7ff;
