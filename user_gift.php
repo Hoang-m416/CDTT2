@@ -10,7 +10,7 @@ if (!isset($_SESSION['customer_id'])) {
 
 $customer_id = $_SESSION['customer_id'];
 
-$query = "SELECT SUM(total_amount) AS total_spent FROM orders WHERE customer_id = ? AND status = 'Đã giao hàng'";
+$query = "SELECT SUM(total_amount) AS total_spent FROM orders WHERE customer_id = ? AND status = 'Đã giao thành công'";
 $stmt = $conn->prepare($query);
 if (!$stmt) {
     die("Lỗi truy vấn: " . $conn->error);
