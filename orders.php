@@ -17,15 +17,19 @@ if ($conn->connect_error) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_order_id'])) {
     $cancel_order_id = (int) $_POST['cancel_order_id'];
 
-    // Kiểm tra trạng thái đơn
-    $stmt = $conn->prepare("SELECT status FROM orders WHERE id = ? AND customer_id = ?");
+    // Kiểm tra trạng thái và phương thức thanh toán của đơn hàng
+    $stmt = $conn->prepare("SELECT status, payment_method FROM orders WHERE id = ? AND customer_id = ?");
     $stmt->bind_param("ii", $cancel_order_id, $customer_id);
     $stmt->execute();
-    $stmt->bind_result($cancel_status);
+    $stmt->bind_result($cancel_status, $payment_method);
     $stmt->fetch();
     $stmt->close();
 
-    if (in_array($cancel_status, ['Chờ xác nhận', 'Đang xử lý', 'Đang chuẩn bị hàng'])) {
+    // Không cho phép hủy nếu là đơn thanh toán qua momo
+    if (strtolower($payment_method) === 'momo') {
+        echo "<script>showToast('❌ Không thể hủy đơn thanh toán bằng MoMo');</script>";
+    }
+    elseif (in_array($cancel_status, ['Chờ xác nhận', 'Đang xử lý', 'Đang chuẩn bị hàng'])) {
         // Cập nhật trạng thái đơn
         $stmt = $conn->prepare("UPDATE orders SET status = 'Đã hủy' WHERE id = ? AND customer_id = ?");
         $stmt->bind_param("ii", $cancel_order_id, $customer_id);
@@ -58,8 +62,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_order_id'])) {
             $update_stock_stmt->close();
         }
         $item_stmt->close();
+
+        echo "<script>showToast('✅ Đã hủy đơn hàng thành công');</script>";
     }
 }
+
 
 
 
@@ -112,6 +119,14 @@ function statusBadge($status) {
     }
 }
 ?>
+<?php
+$stmt = $conn->prepare("SELECT id, order_date, total_amount, status, payment_method FROM orders WHERE customer_id = ? ORDER BY id DESC");
+$stmt->bind_param("i", $customer_id);
+$stmt->execute();
+$stmt->store_result();
+$stmt->bind_result($id, $order_date, $total_amount, $status, $payment_method);
+?>
+
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -146,75 +161,82 @@ function statusBadge($status) {
                 </tr>
             </thead>
             <tbody>
-            <?php while ($stmt->fetch()): ?>
-                <tr>
-                    <td>#<?= $id ?></td>
-                    <td><?= $order_date ?></td>
-                    <td><?= number_format($total_amount, 0, ',', '.') ?> ₫</td>
-                    <td><?= statusBadge($status) ?></td>
+<?php while ($stmt->fetch()): ?>
+    <tr>
+        <td>#<?= $id ?></td>
+        <td><?= $order_date ?></td>
+        <td><?= number_format($total_amount, 0, ',', '.') ?> ₫</td>
+        <td><?= statusBadge($status) ?></td>
 
-                    <!-- Cột Xem chi tiết -->
-                    <td>
-                        <a href="order_detail.php?order_id=<?= $id ?>" class="btn btn-primary btn-sm">Xem chi tiết</a>
-                    </td>
+        <!-- Xem chi tiết -->
+        <td>
+            <a href="order_detail.php?order_id=<?= $id ?>" class="btn btn-primary btn-sm">Xem chi tiết</a>
+        </td>
 
-                    <!-- Cột Thao tác giữ nguyên -->
-                    <td>
-                        <?php if ($status === 'Đã gửi đơn vận chuyển'): ?>
-                            <form method="POST" class="d-inline">
-                                <input type="hidden" name="order_id" value="<?= $id ?>">
-                                <button type="submit" class="btn btn-success btn-sm">Đã nhận hàng</button>
-                            </form>
-                        <?php elseif ($status === 'Đã giao thành công'): ?>
-                        <?php
-                        $products_stmt = $conn->prepare("
-                            SELECT p.id, p.name 
-                            FROM order_items oi 
-                            JOIN products p ON oi.product_id = p.id 
-                            WHERE oi.order_id = ?
-                        ");
-                        $products_stmt->bind_param("i", $id);
-                        $products_stmt->execute();
-                        $products_result = $products_stmt->get_result();
+        <!-- Thao tác -->
+        <td>
+            <?php if ($status === 'Đã gửi đơn vận chuyển'): ?>
+                <form method="POST" class="d-inline">
+                    <input type="hidden" name="order_id" value="<?= $id ?>">
+                    <button type="submit" class="btn btn-success btn-sm">Đã nhận hàng</button>
+                </form>
 
-                        while ($row = $products_result->fetch_assoc()):
-                            $product_id = $row['id'];
-                            $product_name = $row['name'];
+            <?php elseif ($status === 'Đã giao thành công'): ?>
+                <?php
+                $products_stmt = $conn->prepare("
+                    SELECT p.id, p.name 
+                    FROM order_items oi 
+                    JOIN products p ON oi.product_id = p.id 
+                    WHERE oi.order_id = ?
+                ");
+                $products_stmt->bind_param("i", $id);
+                $products_stmt->execute();
+                $products_result = $products_stmt->get_result();
 
-                            // Kiểm tra xem đã có đánh giá cho đơn hàng và sản phẩm này chưa
-                            $check_stmt = $conn->prepare("SELECT id FROM product_ratings WHERE order_id = ? AND product_id = ? AND customer_id = ?");
-                            $check_stmt->bind_param("iii", $id, $product_id, $_SESSION['customer_id']);
-                            $check_stmt->execute();
-                            $check_result = $check_stmt->get_result();
-                            $has_rating = $check_result->num_rows > 0;
-                            $check_stmt->close();
-                        ?>
+                while ($row = $products_result->fetch_assoc()):
+                    $product_id = $row['id'];
+                    $product_name = $row['name'];
 
-                            <?php if ($has_rating): ?>
-                                <a href="view_rating.php?product_id=<?= $product_id ?>&order_id=<?= $id ?>" class="btn btn-outline-info btn-sm my-1">
-                                    <?= htmlspecialchars($product_name) ?>: Xem đánh giá
-                                </a><br>
-                            <?php else: ?>
-                                <a href="rating.php?product_id=<?= $product_id ?>&order_id=<?= $id ?>" class="btn btn-warning btn-sm my-1">
-                                    <?= htmlspecialchars($product_name) ?>: Đánh giá
-                                </a><br>
-                            <?php endif; ?>
-                        <?php endwhile; ?>
-                        <?php $products_stmt->close(); ?>
+                    $check_stmt = $conn->prepare("SELECT id FROM product_ratings WHERE order_id = ? AND product_id = ? AND customer_id = ?");
+                    $check_stmt->bind_param("iii", $id, $product_id, $_SESSION['customer_id']);
+                    $check_stmt->execute();
+                    $check_result = $check_stmt->get_result();
+                    $has_rating = $check_result->num_rows > 0;
+                    $check_stmt->close();
+                ?>
 
+                    <?php if ($has_rating): ?>
+                        <a href="view_rating.php?product_id=<?= $product_id ?>&order_id=<?= $id ?>" class="btn btn-outline-info btn-sm my-1">
+                            <?= htmlspecialchars($product_name) ?>: Xem đánh giá
+                        </a><br>
+                    <?php else: ?>
+                        <a href="rating.php?product_id=<?= $product_id ?>&order_id=<?= $id ?>" class="btn btn-warning btn-sm my-1">
+                            <?= htmlspecialchars($product_name) ?>: Đánh giá
+                        </a><br>
+                    <?php endif; ?>
+                <?php endwhile; ?>
+                <?php $products_stmt->close(); ?>
 
-                        <?php elseif (in_array($status, ['Chờ xác nhận', 'Đang xử lý', 'Đang chuẩn bị hàng'])): ?>
-                            <form method="POST" class="d-inline">
-                                <input type="hidden" name="cancel_order_id" value="<?= $id ?>">
-                                <button type="submit" class="btn btn-danger btn-sm">Hủy đơn hàng</button>
-                            </form>
-                        <?php else: ?>
-                            —
-                        <?php endif; ?>
-                    </td>
-                </tr>
-            <?php endwhile; ?>
-            </tbody>
+            <?php elseif (
+                in_array($status, ['Đã thanh toán','Chờ xác nhận', 'Đang xử lý', 'Đang chuẩn bị hàng'])
+            ): ?>
+                <?php if (strtolower($payment_method) === 'momo'): ?>
+                    <span class="text-muted">Đã thanh toán không thể hủy</span>
+                <?php else: ?>
+                    <form method="POST" class="d-inline">
+                        <input type="hidden" name="cancel_order_id" value="<?= $id ?>">
+                        <button type="submit" class="btn btn-danger btn-sm">Hủy đơn hàng</button>
+                    </form>
+                <?php endif; ?>
+
+            <?php else: ?>
+                —
+            <?php endif; ?>
+        </td>
+    </tr>
+<?php endwhile; ?>
+</tbody>
+
     </table>
     </div>
 </div>

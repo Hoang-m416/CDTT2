@@ -3,15 +3,24 @@ session_start();
 $conn = new mysqli("localhost", "root", "", "sportshop");
 $conn->set_charset("utf8");
 
-// ===== THÊM VÀO GIỎ =====
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['product_id'], $_POST['size'], $_POST['quantity'], $_POST['price'])) {
+// ===== THÊM VÀO GIỊ =====
+if (
+    $_SERVER['REQUEST_METHOD'] == 'POST' &&
+    isset($_POST['product_id'], $_POST['size'], $_POST['quantity'])
+) {
     $product_id = (int)$_POST['product_id'];
     $size = $_POST['size'];
     $quantity = max(1, (int)$_POST['quantity']);
-    $price = (int)$_POST['price'];
     $name = $_POST['name'] ?? '';
     $image = $_POST['image'] ?? '';
     $key = $product_id . '-' . $size;
+
+    $stmt_price = $conn->prepare("SELECT price, discount_percentage FROM products WHERE id = ?");
+    $stmt_price->bind_param("i", $product_id);
+    $stmt_price->execute();
+    $res_price = $stmt_price->get_result();
+    $row_price = $res_price->fetch_assoc();
+    $price = round($row_price['price'] * (1 - $row_price['discount_percentage'] / 100));
 
     if (!isset($_SESSION['cart'])) $_SESSION['cart'] = [];
 
@@ -28,10 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['product_id'], $_POST['
         ];
     }
 
-    // ===== Đồng bộ với cart_items nếu đã đăng nhập =====
     if (isset($_SESSION['customer_id'])) {
         $customer_id = $_SESSION['customer_id'];
-
         $stmt = $conn->prepare("SELECT id FROM cart_items WHERE customer_id = ? AND product_id = ? AND size = ?");
         $stmt->bind_param("iis", $customer_id, $product_id, $size);
         $stmt->execute();
@@ -42,8 +49,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['product_id'], $_POST['
             $stmt->bind_param("ii", $quantity, $row['id']);
             $stmt->execute();
         } else {
-            $stmt = $conn->prepare("INSERT INTO cart_items (customer_id, product_id, size, quantity) VALUES (?, ?, ?, ?)");
-            $stmt->bind_param("iisi", $customer_id, $product_id, $size, $quantity);
+            $created_at = date('Y-m-d H:i:s');
+            $stmt = $conn->prepare("INSERT INTO cart_items (customer_id, product_id, size, quantity, price, created_at) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt->bind_param("iisids", $customer_id, $product_id, $size, $quantity, $price, $created_at);
             $stmt->execute();
         }
     }
@@ -52,8 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['product_id'], $_POST['
     exit;
 }
 
-// ===== CẬP NHẬT SỐ LƯỢNG AJAX =====
-// ===== CẬP NHẬT SỐ LƯỢNG AJAX =====
+// ===== CẤP NHẬT SỐ LƯỢNG AJAX =====
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['ajax_update'])) {
     $key = $_POST['key'];
     $new_quantity = (int)$_POST['quantity'];
@@ -63,14 +70,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['ajax_update'])) {
         exit;
     }
 
-    // Phân tách product_id và size
     if (strpos($key, '_') === false) {
         echo 'error: Key không hợp lệ';
         exit;
     }
     list($product_id, $size) = explode('_', $key);
 
-    // Lấy tồn kho từ DB
     $stmt = $conn->prepare("SELECT quantity FROM product_sizes WHERE product_id = ? AND size = ?");
     $stmt->bind_param("is", $product_id, $size);
     $stmt->execute();
@@ -88,22 +93,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['ajax_update'])) {
         exit;
     }
 
-    // Cập nhật SESSION
-    if ($new_quantity <= 0) {
+    if ($new_quantity <= 0 || $stock_quantity <= 0) {
         unset($_SESSION['cart'][$key]);
     } else {
         $_SESSION['cart'][$key]['quantity'] = $new_quantity;
     }
 
-    // Cập nhật DB nếu đã đăng nhập
     $customer_id = $_SESSION['customer']['id'] ?? null;
     if ($customer_id) {
-        if ($new_quantity <= 0) {
+        if ($new_quantity <= 0 || $stock_quantity <= 0) {
             $stmt = $conn->prepare("DELETE FROM cart_items WHERE customer_id = ? AND product_id = ? AND size = ?");
             $stmt->bind_param("iis", $customer_id, $product_id, $size);
             $stmt->execute();
         } else {
-            // Kiểm tra xem có bản ghi chưa
             $check_stmt = $conn->prepare("SELECT id FROM cart_items WHERE customer_id = ? AND product_id = ? AND size = ?");
             $check_stmt->bind_param("iis", $customer_id, $product_id, $size);
             $check_stmt->execute();
@@ -114,13 +116,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['ajax_update'])) {
                 $update_stmt->bind_param("iiis", $new_quantity, $customer_id, $product_id, $size);
                 $update_stmt->execute();
             } else {
-                // Lấy giá để thêm vào nếu chưa có bản ghi
                 $stmt_price = $conn->prepare("SELECT price, discount_percentage FROM products WHERE id = ?");
                 $stmt_price->bind_param("i", $product_id);
                 $stmt_price->execute();
                 $price_result = $stmt_price->get_result();
                 $price_row = $price_result->fetch_assoc();
-                $price = $price_row['price'] * (1 - $price_row['discount_percentage'] / 100);
+                $price = round($price_row['price'] * (1 - $price_row['discount_percentage'] / 100));
                 $created_at = date('Y-m-d H:i:s');
 
                 $insert_stmt = $conn->prepare("INSERT INTO cart_items (customer_id, product_id, size, quantity, price, created_at) VALUES (?, ?, ?, ?, ?, ?)");
@@ -138,13 +139,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['ajax_update'])) {
 if (isset($_GET['remove'])) {
     $key = $_GET['remove'];
 
-    // Tách product_id và size từ key theo dấu gạch dưới "_"
     if (strpos($key, '_') !== false) {
         list($product_id, $size) = explode('_', $key);
         $product_id = (int)$product_id;
         $size = trim($size);
 
-        // Nếu đăng nhập thì xóa trong DB
         if (isset($_SESSION['customer_id'])) {
             $customer_id = $_SESSION['customer_id'];
             $stmt = $conn->prepare("DELETE FROM cart_items WHERE customer_id = ? AND product_id = ? AND size = ?");
@@ -152,7 +151,6 @@ if (isset($_GET['remove'])) {
             $stmt->execute();
         }
 
-        // Xóa khỏi session
         unset($_SESSION['cart'][$key]);
     }
 
@@ -160,14 +158,13 @@ if (isset($_GET['remove'])) {
     exit;
 }
 
-// ===== KIỂM TRA LẠI TỒN KHO VÀ CẬP NHẬT GIỎ HÀNG =====
+// ===== KIỂM TRA LẠI TỒN KHO VÀ CẬP NHẬT GIỊ HÀNG =====
 $toast_messages = [];
 
 if (isset($_SESSION['cart']) && is_array($_SESSION['cart'])) {
     foreach ($_SESSION['cart'] as $key => $item) {
-        // Kiểm tra các key bắt buộc có tồn tại
         if (!isset($item['product_id'], $item['size'], $item['quantity'], $item['name'])) {
-            continue; // Bỏ qua nếu thiếu dữ liệu
+            continue;
         }
 
         $product_id = $item['product_id'];
@@ -192,7 +189,6 @@ if (isset($_SESSION['cart']) && is_array($_SESSION['cart'])) {
                     $toast_messages[] = "Sản phẩm \"{$name}\" size {$size} chỉ còn {$stock_quantity} sản phẩm. Đã cập nhật số lượng.";
                 }
 
-                // Nếu người dùng đã đăng nhập thì cập nhật vào DB
                 if (isset($_SESSION['customer_id'])) {
                     $customer_id = $_SESSION['customer_id'];
 
@@ -207,20 +203,26 @@ if (isset($_SESSION['cart']) && is_array($_SESSION['cart'])) {
                     }
                 }
             }
+
+            $stmt_price = $conn->prepare("SELECT price, discount_percentage FROM products WHERE id = ?");
+            $stmt_price->bind_param("i", $product_id);
+            $stmt_price->execute();
+            $res_price = $stmt_price->get_result();
+            if ($row_price = $res_price->fetch_assoc()) {
+                $discounted_price = round($row_price['price'] * (1 - $row_price['discount_percentage'] / 100));
+                $_SESSION['cart'][$key]['price'] = $discounted_price;
+            }
         }
     }
 }
 
-
-
-// ===== TÍNH TỔNG TIỀN =====
 $cart = $_SESSION['cart'] ?? [];
 $subtotal = 0;
 foreach ($cart as $item) {
+    if (!isset($item['price'], $item['quantity'])) continue;
     $subtotal += $item['price'] * $item['quantity'];
 }
 
-// ===== PHÍ VẬN CHUYỂN =====
 $province = $_POST['province'] ?? ($_SESSION['province'] ?? '');
 $_SESSION['province'] = $province;
 $shipping_fee = 0;
@@ -239,6 +241,7 @@ if ($subtotal >= 1000000) {
 
 $total = $subtotal + $shipping_fee;
 ?>
+
 
 
 
@@ -274,33 +277,46 @@ $total = $subtotal + $shipping_fee;
     <form method="post">
       <div class="row">
         <div class="col-lg-8">
-          <?php foreach ($cart as $key => $item): ?>
-            <div class="row cart-item align-items-center bg-white mb-2 rounded p-3 shadow-sm">
-              <div class="col-3 text-center">
-                <img src="admin/uploads/<?= htmlspecialchars($item['image']) ?>" alt="<?= htmlspecialchars($item['name']) ?>">
-              </div>
-              <div class="col-9">
-                <div class="d-flex justify-content-between">
-                  <div>
-                    <h6><?= htmlspecialchars($item['name']) ?></h6>
-                    <span class="badge bg-warning text-dark">Size <?= htmlspecialchars($item['size']) ?></span>
-                    <div class="price"><?= number_format($item['price'], 0, ',', '.') ?> ₫</div>
+          <?php foreach ($cart as $key => $item): 
+    if (
+        !isset($item['name'], $item['price'], $item['quantity'], $item['image'], $item['size']) ||
+        (int)$item['quantity'] <= 0
+    ) {
+        continue; // Bỏ qua nếu thiếu thông tin hoặc số lượng <= 0
+    }
+
+    $name = $item['name'];
+    $image = $item['image'];
+    $size = $item['size'];
+    $price = $item['price'];
+    $quantity = $item['quantity'];
+?>
+    <div class="row cart-item align-items-center bg-white mb-2 rounded p-3 shadow-sm">
+        <div class="col-3 text-center">
+            <img src="admin/uploads/<?= htmlspecialchars($image) ?>" alt="<?= htmlspecialchars($name) ?>">
+        </div>
+        <div class="col-9">
+            <div class="d-flex justify-content-between">
+                <div>
+                    <h6><?= htmlspecialchars($name) ?></h6>
+                    <span class="badge bg-warning text-dark">Size <?= htmlspecialchars($size) ?></span>
+                    <div class="price"><?= number_format($price, 0, ',', '.') ?> ₫</div>
                     <div class="mt-2 d-flex align-items-center">
                         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="changeQuantity('<?= $key ?>', -1)">-</button>
-                        <input type="text" readonly class="form-control text-center mx-2" style="width: 60px;" value="<?= $item['quantity'] ?>" id="qty-<?= $key ?>">
+                        <input type="text" readonly class="form-control text-center mx-2" style="width: 60px;" value="<?= $quantity ?>" id="qty-<?= $key ?>">
                         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="changeQuantity('<?= $key ?>', 1)">+</button>
                     </div>
-
-                  </div>
-                  <div>
-                    <strong><?= number_format($item['price'] * $item['quantity'], 0, ',', '.') ?> ₫</strong>
+                </div>
+                <div>
+                    <strong><?= number_format($price * $quantity, 0, ',', '.') ?> ₫</strong>
                     <br><br>
                     <a href="?remove=<?= urlencode($key) ?>" class="btn btn-sm btn-outline-danger">Xoá</a>
-                  </div>
                 </div>
-              </div>
             </div>
-          <?php endforeach; ?>
+        </div>
+    </div>
+<?php endforeach; ?>
+
         </div>
 
         <div class="col-lg-4">

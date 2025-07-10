@@ -96,7 +96,9 @@ try {
     // 4. Xóa giỏ hàng
     unset($_SESSION['cart']);
     $conn->commit();
-
+    $stmt = $conn->prepare("DELETE FROM cart_items WHERE customer_id = ?");
+    $stmt->bind_param("i", $customer_id);
+    $stmt->execute();
     // Chuyển hướng về trang đơn hàng kèm thông báo thành công
     header("Location: orders.php?success=1");
     exit;

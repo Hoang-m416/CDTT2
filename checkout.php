@@ -72,6 +72,7 @@ if ($total_spent >= 60000000) {
 // Áp dụng giảm giá
 $discount_amount = $total * $discount_percent / 100;
 $grand_total = $total - $discount_amount + $shipping_fee;
+
 ?>
 
 

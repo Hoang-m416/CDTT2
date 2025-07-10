@@ -68,8 +68,19 @@ if (isset($_GET['resultCode']) && $_GET['resultCode'] == '0') {
             $insertItemStmt->execute([$order_id, $product_id, $size, $qty, $price]);
         }
 
-        // 6. Xóa giỏ hàng khỏi session
-        unset($_SESSION['cart']);
+     // 6. Xóa giỏ hàng khỏi SESSION và DATABASE
+unset($_SESSION['cart']);
+
+$stmt = $conn->prepare("DELETE FROM cart_items WHERE customer_id = ?");
+$stmt->execute([$customer_id]);
+
+if ($stmt->rowCount() > 0) {
+    // Xóa thành công từ DB
+} else {
+    // Nếu cần, bạn có thể log lại: không có item nào để xóa
+}
+
+
 
         // 7. Commit
         $conn->commit();
