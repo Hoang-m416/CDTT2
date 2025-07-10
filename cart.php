@@ -512,7 +512,15 @@ function changeQuantity(key, delta) {
 }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
+<script src="assets/js/script.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="assets/js/main.js"></script>
+    <script src="assets/js/popup.js"></script>
+    <script src="assets/js/breadcrumb.js"></script>
+    <script src="assets/js/pagination.js"></script>
+    <script src="assets/js/sort.js"></script>
+    <script src="assets/js/quantity.js"></script>
+    <script src="assets/js/slider.js"></script>
 <?php if (!empty($toast_messages)): ?>
 <script>
     document.addEventListener("DOMContentLoaded", () => {
